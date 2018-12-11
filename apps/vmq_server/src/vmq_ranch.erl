@@ -52,7 +52,16 @@ init(Ref, Parent, Socket, Transport, Opts) ->
                 ranch_ssl ->
                     case proplists:get_value(use_identity_as_username, Opts, false) of
                         false ->
-                            FsmMod:init(Peer, Opts);
+                            case vmq_plugin:all_till_ok(on_ssl_preauth, [Peer, vmq_ssl:peercert(Socket)]) of
+                                ok ->
+                                    FsmMod:init(Peer, Opts);
+                                {error, no_matching_hook_found} ->
+                                    FsmMod:init(Peer, Opts);
+                                {ok, Username} ->
+                                    FsmMod:init(Peer, [{preauth, Username}|Opts]);
+                                {error, Reason} ->
+                                    exit(Reason)
+                            end;
                         true ->
                             FsmMod:init(Peer, [{preauth, vmq_ssl:socket_to_common_name(Socket)}|Opts])
                     end;

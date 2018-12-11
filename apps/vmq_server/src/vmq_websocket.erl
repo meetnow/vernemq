@@ -54,13 +54,22 @@ init_(Type, Req, Opts) ->
     FsmState =
     case Type of
         ssl ->
+            %% Hacky to use the private set/2 function, but
+            %% didn't have a better solution to get at the socket.
+            SSLSocket = cowboy_req:get(socket, Req),
             case proplists:get_value(use_identity_as_username, Opts, false) of
                 false ->
-                    FsmMod:init(Peer, Opts);
+                    case vmq_plugin:all_till_ok(on_ssl_preauth, [Peer, vmq_ssl:peercert(SSLSocket)]) of
+                        ok ->
+                            FsmMod:init(Peer, Opts);
+                        {error, no_matching_hook_found} ->
+                            FsmMod:init(Peer, Opts);
+                        {ok, Username} ->
+                            FsmMod:init(Peer, [{preauth, Username}|Opts]);
+                        {error, Reason} ->
+                            exit(Reason)
+                    end;
                 true ->
-                    %% Hacky to use the private set/2 function, but
-                    %% didn't have a better solution to get at the socket.
-                    SSLSocket = cowboy_req:get(socket, Req),
                     FsmMod:init(Peer, [{preauth, vmq_ssl:socket_to_common_name(SSLSocket)}|Opts])
             end;
         _ ->

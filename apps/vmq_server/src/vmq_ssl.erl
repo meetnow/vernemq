@@ -14,14 +14,23 @@
 
 -module(vmq_ssl).
 -include_lib("public_key/include/public_key.hrl").
--export([socket_to_common_name/1,
+-export([peercert/1,
+         socket_to_common_name/1,
          opts/1]).
 
-socket_to_common_name(Socket) ->
+peercert(Socket) ->
     case ssl:peercert(Socket) of
         {error, no_peercert} ->
             undefined;
         {ok, Cert} ->
+            Cert
+    end.
+
+socket_to_common_name(Socket) ->
+    case peercert(Socket) of
+        undefined ->
+            undefined;
+        Cert ->
             OTPCert = public_key:pkix_decode_cert(Cert, otp),
             TBSCert = OTPCert#'OTPCertificate'.tbsCertificate,
             Subject = TBSCert#'OTPTBSCertificate'.subject,
